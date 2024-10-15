@@ -11,6 +11,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import Link from "next/link";
+
 
 export default function HomePage() {
   const [tasks, setTasks] = useState([
@@ -55,9 +57,9 @@ export default function HomePage() {
           <a className="text-sm font-medium hover:underline underline-offset-4" href="#">
             Dashboard
           </a>
-          <a className="text-sm font-medium hover:underline underline-offset-4" href="#">
+          <Link href="/Calendar" className="text-sm font-medium hover:underline underline-offset-4" >
             Calendar
-          </a>
+          </Link>
           <a className="text-sm font-medium hover:underline underline-offset-4" href="#">
             Tasks
           </a>
