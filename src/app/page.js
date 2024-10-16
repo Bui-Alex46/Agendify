@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link";
 import WeatherCard from "@/components/weather/WeatherCard"; 
-import WeatherCard from "@/components/weather/WeatherCard"; 
 
 
 export default function HomePage() {
@@ -56,7 +55,6 @@ export default function HomePage() {
           <span className="ml-2 text-lg font-bold">Agendify</span>
         </a>
         <nav className="ml-auto flex gap-4 sm:gap-6">
-       
           <a className="text-sm font-medium hover:underline underline-offset-4" href="/">
             Dashboard
           </a>
