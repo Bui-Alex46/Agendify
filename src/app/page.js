@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link";
+import WeatherCard from "@/components/weather/WeatherCard"; 
 
 
 export default function HomePage() {
@@ -54,7 +55,7 @@ export default function HomePage() {
           <span className="ml-2 text-lg font-bold">Agendify</span>
         </a>
         <nav className="ml-auto flex gap-4 sm:gap-6">
-          <a className="text-sm font-medium hover:underline underline-offset-4" href="#">
+          <a className="text-sm font-medium hover:underline underline-offset-4" href="/">
             Dashboard
           </a>
           <Link href="/Calendar" className="text-sm font-medium hover:underline underline-offset-4" >
@@ -103,7 +104,8 @@ export default function HomePage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <WeatherCard />
+          {/* <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Weather</CardTitle>
               <Sun className="w-4 h-4 text-muted-foreground" />
@@ -123,7 +125,7 @@ export default function HomePage() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
