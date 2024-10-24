@@ -105,27 +105,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
           <WeatherCard />
-          {/* <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">Weather</CardTitle>
-              <Sun className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Cloud className="w-8 h-8 mr-2 text-blue-500" />
-                  <div>
-                    <p className="text-2xl font-bold">72°F</p>
-                    <p className="text-sm text-muted-foreground">Partly Cloudy</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Recommendation:</p>
-                  <p className="text-sm text-muted-foreground">Light jacket</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card> */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
