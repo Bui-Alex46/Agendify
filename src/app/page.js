@@ -59,9 +59,11 @@ export default function HomePage() {
   }
 
   const updateEvent = (updatedEvent) => {
-    setEvents(events.map((events) => (events.id === updatedEvents.id? updatedEvent : events)))
-    setSelectedEvent(null)
-  }
+    setEvents(prevEvents => prevEvents.map(event => 
+      event.id === updatedEvent.id ? { ...event, ...updatedEvent } : event
+    ));
+    setSelectedEvent(null);
+  };
   const getPriorityColor = (priority) => {
     switch (priority) {
       case "high":
@@ -314,15 +316,24 @@ export default function HomePage() {
         onClick={() => setSelectedEvent(event)} // Assuming you want to handle event selection similarly
       >
         <div className="flex items-center space-x-4 w-full">
-          <div className={`w-4 h-4 bg-blue-500 rounded-full`} /> {/* Customize the color as needed */}
+        {event.priority ? (
+          <div className={`w-4 h-4 ${getPriorityColor(event.priority)} rounded-full`} />
+        ) : (
+          <div className="w-4 h-4 bg-blue-500 rounded-full" />
+        )}
+           {/* Customize the color as needed */}
           <div className="flex-1">
             <p className="font-medium">{event.summary}</p> {/* Event title */}
             <p className="text-sm text-muted-foreground">
               {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p> {/* Event time */}
-          </div>
-          <Clock className="w-5 h-5 text-muted-foreground" /> {/* Clock icon */}
-        </div>
+            </div>
+                            {event.completed ? (
+                              <Check className="w-5 h-5 text-green-500" />
+                            ) : (
+                              <Clock className="w-5 h-5 text-muted-foreground" />
+                            )}
+                          </div>
       </Button>
     </DialogTrigger>
     <DialogContent>
@@ -362,9 +373,9 @@ export default function HomePage() {
         Priority
       </Label>
       <Select
-        value={selectedTask?.priority}
+        value={selectedEvent?.priority}
         onValueChange={(value) =>
-          setSelectedTask((prev) =>
+          setSelectedEvent((prev) =>
             prev ? { ...prev, priority: value } : null
           )
         }
@@ -397,9 +408,9 @@ export default function HomePage() {
         Status
       </Label>
       <RadioGroup
-        value={selectedTask?.completed ? "completed" : "pending"}
+        value={selectedEvent?.completed ? "completed" : "pending"}
         onValueChange={(value) =>
-          setSelectedTask((prev) =>
+          setSelectedEvent((prev) =>
             prev ? { ...prev, completed: value === "completed" } : null
           )
         }
@@ -422,11 +433,11 @@ export default function HomePage() {
       Delete
     </Button>
     <div className="space-x-2">
-      <Button variant="outline" onClick={() => setSelectedTask(null)}>
+      <Button variant="outline" onClick={() => setSelectedEvent(null)}>
         <X className="w-4 h-4 mr-2" />
         Cancel
       </Button>
-      <Button onClick={() => selectedTask && updateTask(selectedTask)}>
+      <Button onClick={() => selectedEvent && updateEvent(selectedEvent)}>
         <Check className="w-4 h-4 mr-2" />
         Save Changes
       </Button>

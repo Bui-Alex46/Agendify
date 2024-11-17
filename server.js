@@ -5,6 +5,7 @@ const session = require('express-session');
 const app = express();
 const cors = require('cors'); // Import cors
 require('dotenv').config();
+const pool = require('./src/db/db');  // Import the pool object from db.js
 
 const port = 3001;
 
@@ -58,6 +59,11 @@ app.get('/oauth2callback', async (req, res) => {
 
       const events = eventsResponse.data.items; // Ensure you are accessing the correct path
 
+      const userId = 1;  // Replace with actual logic to get the user ID
+
+      // Store the Google events in the database
+      await storeGoogleEvents(userId, events);
+
       // Redirect back to the client with the events in query parameters
       const eventsEncoded = encodeURIComponent(JSON.stringify(events));
       res.redirect(`http://localhost:3000/?events=${eventsEncoded}`);
@@ -75,11 +81,49 @@ app.get('/oauth2callback', async (req, res) => {
 // Endpoint to retrieve events from the session
 app.get('/get-events', (req, res) => {
   if (req.session.events) {
+    console.log(req.session.events)
     res.json(req.session.events);
   } else {
     res.status(404).send('No events found. Please log in.');
   }
 });
+
+// Example route that fetches data from the events table
+app.get('/events', async (req, res) => {
+  try {
+      const result = await pool.query('SELECT * FROM events');
+      res.json(result.rows);  // Send the fetched events as JSON response
+  } catch (err) {
+      console.error('Error fetching events:', err);
+      res.status(500).json({ error: 'Failed to fetch events' });
+  }
+});
+
+
+const storeGoogleEvents = async (userId, googleEvents) => {
+  for (let event of googleEvents) {
+      const { summary, start, end, description } = event;
+
+      // Prepare event data
+      const title = summary || 'No Title';
+      const deadline = start.dateTime || end.dateTime;
+      const notes = description || '';
+      const priority = 1; // You can adjust based on your logic
+      const status = false || true; // Default status is 'pending'
+
+      try {
+          // Insert event into the events table
+          const result = await pool.query(
+              `INSERT INTO events (user_id, title, deadline, priority, notes, status)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [userId, title, deadline, priority, notes, status]
+          );
+          console.log(`Event "${title}" inserted successfully`);
+      } catch (err) {
+          console.error('Error inserting event:', err);
+      }
+  }
+};
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
