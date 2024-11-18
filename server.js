@@ -4,6 +4,7 @@ const fs = require('fs');
 const session = require('express-session');
 const app = express();
 const cors = require('cors'); // Import cors
+const bodyParser = require("body-parser");
 require('dotenv').config();
 const pool = require('./src/db/db');  // Import the pool object from db.js
 
@@ -23,7 +24,7 @@ app.use(cors({
   origin: 'http://localhost:3000', // Allow requests from this origin
   credentials: true
 }));
-
+app.use(bodyParser.json()); // Parses JSON payloads
 // Route to start the OAuth2 flow
 app.get('/auth', (req, res) => {
   const authUrl = oAuth2Client.generateAuthUrl({
@@ -48,7 +49,7 @@ app.get('/oauth2callback', async (req, res) => {
       // Fetch events from the calendar
       const calendar = google.calendar({ version: 'v3', auth: oAuth2Client });
 
-      // Fetch upcoming 10 events
+      // Fetchup coming 10 events
       const eventsResponse = await calendar.events.list({
         calendarId: 'primary',
         timeMin: new Date().toISOString(),
@@ -99,6 +100,30 @@ app.get('/events', async (req, res) => {
   }
 });
 
+
+// Sign up route
+app.post('/signup', async (req, res) => {
+  try{
+    console.log("Signup endpoint hit", req.body);
+    res.json({ message: "Testing route" });
+    const {username, password} = req.body
+    if(!username || !password){
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const result = await pool.query(
+      'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id',
+      [username, password]
+    );
+
+    // Respond with success
+    res.status(201).json({ message: 'User created successfully', userId: result.rows[0].id });
+  }catch(e){
+    console.error('Error signing up user:', e);
+    res.status(500).json({ error: 'An error occurred during sign up' });
+    
+  }
+});
 
 const storeGoogleEvents = async (userId, googleEvents) => {
   for (let event of googleEvents) {
