@@ -7,8 +7,12 @@ const cors = require('cors'); // Import cors
 const bodyParser = require("body-parser");
 require('dotenv').config();
 const pool = require('./src/db/db');  // Import the pool object from db.js
-
+const saltRounds = 10;
+const bcrypt = require('bcrypt');
 const port = 3001;
+const pgSession = require('connect-pg-simple')(session);
+const { requireLogin } = require('./middleware');
+
 
 // Google OAuth2 credentials
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -19,12 +23,37 @@ const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 // Scopes for calendar read-only access
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 
+
 // Set up session middleware
+app.use(
+  session({
+    store: new pgSession({
+      pool: pool, // Use PostgreSQL connection pool
+      tableName: 'session', // Use session table created earlier
+    }),
+    secret: process.env.SESSION_SECRET || 'your-secret-key', // Secure key for signing the session ID
+    resave: false, // Avoid resaving sessions if unmodified
+    saveUninitialized: false, // Only save sessions when something is stored
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      secure: false, // Set to true if using HTTPS
+      httpOnly: true, // Prevent client-side access to the cookie
+    },
+  })
+);
+
+app.use(express.json());
+
+// Cross-origin for front-end 
 app.use(cors({
   origin: 'http://localhost:3000', // Allow requests from this origin
   credentials: true
 }));
+
+
 app.use(bodyParser.json()); // Parses JSON payloads
+
+
 // Route to start the OAuth2 flow
 app.get('/auth', (req, res) => {
   const authUrl = oAuth2Client.generateAuthUrl({
@@ -34,14 +63,34 @@ app.get('/auth', (req, res) => {
   res.redirect(authUrl);
 });
 
+// Get user info
+app.get('/user-info', requireLogin, async (req, res) => {
+  try {
+    const userId = req.session.user.user_id; // Get user ID from session
+    const query = 'SELECT * FROM users WHERE user_id = $1';
+    const result = await pool.query(query, [userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    res.json(result.rows[0]); // Send user info
+  } catch (error) {
+    console.error('Error fetching user info:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // Route to handle Google OAuth2 callback
 // Route to handle Google OAuth2 callback
-app.get('/oauth2callback', async (req, res) => {
+app.get('/oauth2callback', requireLogin, async (req, res) => {
+  console.log('Session in /oauth2callback:', req.session);
   const code = req.query.code;
   if (code) {
     try {
       const { tokens } = await oAuth2Client.getToken(code);
       oAuth2Client.setCredentials(tokens);
+      const userId = req.session.user.user_id;
 
       // Save the token for later executions
       fs.writeFileSync('token.json', JSON.stringify(tokens));
@@ -59,15 +108,14 @@ app.get('/oauth2callback', async (req, res) => {
       });
 
       const events = eventsResponse.data.items; // Ensure you are accessing the correct path
-
-      const userId = 1;  // Replace with actual logic to get the user ID
+      
 
       // Store the Google events in the database
       await storeGoogleEvents(userId, events);
 
       // Redirect back to the client with the events in query parameters
       const eventsEncoded = encodeURIComponent(JSON.stringify(events));
-      res.redirect(`http://localhost:3000/?events=${eventsEncoded}`);
+      res.redirect(`http://localhost:3000/Homepage?events=${eventsEncoded}`);
     } catch (err) {
       console.error('Error retrieving access token or fetching events:', err);
       res.status(500).send('Error retrieving access token or fetching events: ' + err);
@@ -89,41 +137,102 @@ app.get('/get-events', (req, res) => {
   }
 });
 
-// Example route that fetches data from the events table
+// Route to fetch events for the logged-in user
 app.get('/events', async (req, res) => {
+  if (!req.session.user) {
+    return res.status(401).json({ error: 'Unauthorized. Please log in.' });
+  }
+  const userId = req.session.user.user_id; // Retrieve user ID from session
+  console.log(userId)
+
   try {
-      const result = await pool.query('SELECT * FROM events');
-      res.json(result.rows);  // Send the fetched events as JSON response
+    const query = 'SELECT * FROM events WHERE user_id = $1'; // Filter events by user ID
+    const result = await pool.query(query, [userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No events found for this user.' });
+    }
+
+    res.json(result.rows); // Send the user's events as a JSON response
   } catch (err) {
-      console.error('Error fetching events:', err);
-      res.status(500).json({ error: 'Failed to fetch events' });
+    console.error('Error fetching events:', err);
+    res.status(500).json({ error: 'Internal server error.' });
   }
 });
-
 
 // Sign up route
 app.post('/signup', async (req, res) => {
-  try{
-    console.log("Signup endpoint hit", req.body);
-    res.json({ message: "Testing route" });
-    const {username, password} = req.body
-    if(!username || !password){
-      return res.status(400).json({ error: 'Username and password are required' });
+  try {
+    const { username, password } = req.body;
+    console.log('Request body:', { username, password });
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required.' });
     }
 
-    const result = await pool.query(
-      'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id',
-      [username, password]
-    );
+    // Hash the password
+    console.log('Hashing password...');
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Respond with success
-    res.status(201).json({ message: 'User created successfully', userId: result.rows[0].id });
-  }catch(e){
-    console.error('Error signing up user:', e);
-    res.status(500).json({ error: 'An error occurred during sign up' });
-    
+    // Save the user to the database
+    const query = `INSERT INTO users (username, password) VALUES ($1, $2) RETURNING user_id`;
+    console.log('Executing query:', query, { username, hashedPassword });
+    const result = await pool.query(query, [username, hashedPassword]);
+
+    console.log('User created with ID:', result.rows[0].user_id);
+    res.status(201).json({ message: 'User created successfully', userId: result.rows[0].user_id });
+  } catch (error) {
+    console.error('Error signing up user:', error);
+
+    if (error.code === '23505') {
+      // Duplicate username
+      res.status(400).json({ error: 'Username already exists' });
+    } else {
+      // General server error
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 });
+
+
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required.' });
+    }
+
+    // Fetch the user from the database
+    const query = 'SELECT * FROM users WHERE username = $1';
+    const result = await pool.query(query, [username]);
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    const user = result.rows[0];
+
+    // Compare the provided password with the hashed password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid credentials.' });
+    }
+
+    // Set user_id in the session
+
+    req.session.user = { user_id: user.user_id, username: user.username };
+    console.log('Session after setting user:', req.session);
+
+    res.json({ message: 'Login successful', user: req.session.user  });
+    
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 
 const storeGoogleEvents = async (userId, googleEvents) => {
   for (let event of googleEvents) {
@@ -144,11 +253,34 @@ const storeGoogleEvents = async (userId, googleEvents) => {
               [userId, title, deadline, priority, notes, status]
           );
           console.log(`Event "${title}" inserted successfully`);
-      } catch (err) {
+      } catch (err) {                               
           console.error('Error inserting event:', err);
       }
   }
 };
+
+app.put('/update-event', async (req, res) => {
+  const { event_id, title, deadline, status, priority } = req.body;
+
+  try {
+    // Update the event in the database
+    const result = await pool.query(
+      `UPDATE events 
+       SET title = $1, deadline = $2, priority = $3, status = $4
+       WHERE event_id = $5`,
+      [title, deadline, priority, status, event_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: 'Event not found.' });
+    }
+
+    res.json({ message: 'Event updated successfully.' });
+  } catch (err) {
+    console.error('Error updating event:', err);
+    res.status(500).json({ error: 'Failed to update event.' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

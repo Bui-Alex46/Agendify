@@ -37,7 +37,7 @@ const CalendarPage = () => {
       case "low":
         return "bg-green-500"
       default:
-        return "bg-gray-500"
+        return "bg-blue-500"
     }
   }
 
@@ -50,7 +50,7 @@ const CalendarPage = () => {
           <span className="ml-2 text-lg font-bold">Agendify</span>
         </a>
         <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/">
+          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/Homepage">
             Dashboard
           </Link>
           <Link href="/Calendar" className="text-sm font-medium hover:underline underline-offset-4" >

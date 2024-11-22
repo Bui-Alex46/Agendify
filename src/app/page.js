@@ -13,39 +13,72 @@ export default function SignUpPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [isUser, setIsUser] = useState(false); // Control whether to show login or sign-up form
+  const [isUser, setIsUser] = useState(false); // Toggle between login and sign-up forms
   const router = useRouter();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    console.log("Form submitted"); // Debug log
-    console.log({ username, password }); // Check values being sent
-    if (!username || !password) {
-      setError("Username and password are required");
-      return;
-    }
-  
+  // Handle login
+  const handleLogin = async () => {
     try {
-      const response = await fetch('http://localhost:3001/signup', {
+      const response = await fetch("http://localhost:3001/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+          credentials: 'include', // Include cookies with the request
+        body: JSON.stringify({ username, password }),
+      });
+      console.log(response)
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || "Error logging in");
+        return;
+      }
+
+      const data = await response.json();
+      console.log("Login successful:", data);
+      router.push("/Homepage");
+    } catch (err) {
+      console.error("Login failed:", err);
+      setError("Something went wrong. Please try again.");
+    }
+  };
+
+  // Handle sign-up
+  const handleSignUp = async () => {
+    try {
+      const response = await fetch("http://localhost:3001/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-      console.log("Fetch response:", response); // Log the raw response
+
       if (!response.ok) {
-        // Attempt to parse JSON error; fallback to generic error
-        const errorData = await response.json().catch(() => ({ error: "Unexpected server error" }));
+        const errorData = await response.json();
         setError(errorData.error || "Error signing up");
         return;
       }
-    
+
       const data = await response.json();
-      console.log("User created with ID:", data.userId);
+      console.log("Sign-up successful:", data);
       router.push("/Homepage");
-    } catch (error) {
-      console.error("Sign-up failed:", error);
+    } catch (err) {
+      console.error("Sign-up failed:", err);
       setError("Something went wrong. Please try again.");
+    }
+  };
+
+  // Form submission handler
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setError(""); // Clear previous errors
+
+    if (!username || !password) {
+      setError("Username and password are required.");
+      return;
+    }
+
+    if (isUser) {
+      handleLogin();
+    } else {
+      handleSignUp();
     }
   };
 

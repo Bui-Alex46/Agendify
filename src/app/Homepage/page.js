@@ -26,23 +26,28 @@ export default function HomePage() {
   const [selectedTask, setSelectedTask] = useState(null)
   const [selectedEvent, setSelectedEvent] = useState(null)
 
-
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const eventsFromURL = urlParams.get('events') ? JSON.parse(decodeURIComponent(urlParams.get('events'))) : [];
+    fetch('http://localhost:3001/events',{
+      method: 'GET',
+      credentials: 'include', // Include cookies
+    })
+      .then(response => response.json())
+      .then(data => {
+        // Transform data to include a `start` property based on `deadline`
+        const transformedEvents = data.map(event => ({
+          ...event,
+          start: {
+            dateTime: event.deadline, // Use `deadline` as the `start.dateTime`
+          },
 
-    // If events are present in the URL, set them to state
-    if (eventsFromURL.length > 0) {
-      setEvents(eventsFromURL);
-    } else {
-      // Fetch events from the server if no events in URL
-      fetch('http://localhost:3001/get-events')
-        .then(response => response.json())
-        .then(data => setEvents(data))
-        .catch(error => console.error('Error fetching events:', error));
-    }
-  }, []); // Empty dependency array ensures this runs once after the component mounts
- 
+        }));
+  
+        setEvents(transformedEvents); // Update the state with transformed events
+      })
+      .catch(error => console.error('Error fetching events:', error));
+  }, []);
+
+
   const handleLinkGoogleCalendar = () => {
     window.location.href = 'http://localhost:3001/auth'; // Directs user to the OAuth2 flow
   };
@@ -57,23 +62,48 @@ export default function HomePage() {
     setTasks(tasks.filter((task) => task.id !== taskId))
     setSelectedTask(null)
   }
+  const updateEventInDatabase = async (updatedEvent) => {
+    try {
+      const response = await fetch('http://localhost:3001/update-event', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedEvent),
+      });
+  
+      if (!response.ok) {
+        throw new Error('Failed to update event.');
+      }
+  
+      const result = await response.json();
+      console.log(result.message);
+    } catch (error) {
+      console.error('Error updating event in database:', error);
+    }
+  };
 
   const updateEvent = (updatedEvent) => {
     setEvents(prevEvents => prevEvents.map(event => 
-      event.id === updatedEvent.id ? { ...event, ...updatedEvent } : event
+      event.event_id === updatedEvent.event_id ? { ...event, ...updatedEvent } : event
     ));
     setSelectedEvent(null);
+     // Persist to database
+    updateEventInDatabase(updatedEvent);
+    
   };
+
+ 
   const getPriorityColor = (priority) => {
     switch (priority) {
-      case "high":
+      case 3:
         return "bg-red-500"
-      case "medium":
+      case 2:
         return "bg-yellow-500"
-      case "low":
+      case 1:
         return "bg-green-500"
       default:
-        return "bg-gray-500"
+         return "bg-blue-500"
     }
   }
 
@@ -308,7 +338,7 @@ export default function HomePage() {
 
           {/* Render Google Calendar Events */}
           {events.map((event) => (
-  <Dialog key={event.id}>
+  <Dialog key={event.event_id}>
     <DialogTrigger asChild>
       <Button
         variant="outline"
@@ -323,9 +353,17 @@ export default function HomePage() {
         )}
            {/* Customize the color as needed */}
           <div className="flex-1">
-            <p className="font-medium">{event.summary}</p> {/* Event title */}
+            <p className="font-medium">{event.title}</p> {/* Event title */}
             <p className="text-sm text-muted-foreground">
-              {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {event.start ? (
+  new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+) : (
+  'No start time available'
+)}
+
             </p> {/* Event time */}
             </div>
                             {event.completed ? (
@@ -373,20 +411,21 @@ export default function HomePage() {
         Priority
       </Label>
       <Select
-        value={selectedEvent?.priority}
-        onValueChange={(value) =>
-          setSelectedEvent((prev) =>
-            prev ? { ...prev, priority: value } : null
-          )
-        }
+       value={selectedEvent?.priority || ""}
+       onValueChange={(value) => {
+         setSelectedEvent((prev) => (prev ? { ...prev, priority: value } : null));
+         if (selectedEvent) {
+           updateEvent({ ...selectedEvent, priority: value });
+         }
+       }}
       >
         <SelectTrigger className="col-span-3">
           <SelectValue placeholder="Select priority" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="low">Low</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="high">High</SelectItem>
+          <SelectItem value= {1}>Low</SelectItem>
+          <SelectItem value= {2}>Medium</SelectItem>
+          <SelectItem value= {3}>High</SelectItem>
         </SelectContent>
       </Select>
     </div>

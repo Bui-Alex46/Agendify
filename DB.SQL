@@ -32,5 +32,16 @@ VALUES (1, 'Finish project setup', '2024-12-31 23:59:59', 1, 'Set up PostgreSQL 
 
 
 DELETE FROM events
-WHERE user_id = 1
-  AND event_id BETWEEN 12 AND 21;
+WHERE user_id = 2
+  AND event_id BETWEEN 43 AND 51;
+
+
+CREATE TABLE "session" (
+    "sid" VARCHAR NOT NULL PRIMARY KEY,
+    "sess" JSON NOT NULL,
+    "expire" TIMESTAMP(6) NOT NULL
+)
+WITH (OIDS=FALSE);
+
+
+CREATE INDEX "IDX_session_expire" ON "session" ("expire");
