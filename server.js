@@ -12,7 +12,14 @@ const bcrypt = require('bcrypt');
 const port = 3001;
 const pgSession = require('connect-pg-simple')(session);
 const { requireLogin } = require('./middleware');
+const { ChatOpenAI } = require("@langchain/openai");
 
+
+const model = new ChatOpenAI({
+  modelName: 'gpt-3.5-turbo',
+  temperature: 0.7,
+  openAIApiKey: process.env.OPENAI_API_KEY, // Use your OpenAI API key
+});
 
 // Google OAuth2 credentials
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -22,6 +29,7 @@ const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 
 // Scopes for calendar read-only access
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+
 
 
 // Set up session middleware
@@ -108,8 +116,9 @@ app.get('/oauth2callback', requireLogin, async (req, res) => {
       });
 
       const events = eventsResponse.data.items; // Ensure you are accessing the correct path
-      
-
+      console.log(events)
+      // Transform the events to match the database structure
+ 
       // Store the Google events in the database
       await storeGoogleEvents(userId, events);
 
@@ -143,7 +152,7 @@ app.get('/events', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized. Please log in.' });
   }
   const userId = req.session.user.user_id; // Retrieve user ID from session
-  console.log(userId)
+
 
   try {
     const query = 'SELECT * FROM events WHERE user_id = $1'; // Filter events by user ID
@@ -240,17 +249,18 @@ const storeGoogleEvents = async (userId, googleEvents) => {
 
       // Prepare event data
       const title = summary || 'No Title';
-      const deadline = start.dateTime || end.dateTime;
+      const startTime = start.dateTime || start.date;
+      const endTime = end.dateTime || end.date;
       const notes = description || '';
       const priority = 1; // You can adjust based on your logic
-      const status = false || true; // Default status is 'pending'
+      const status = false;
 
       try {
           // Insert event into the events table
           const result = await pool.query(
-              `INSERT INTO events (user_id, title, deadline, priority, notes, status)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [userId, title, deadline, priority, notes, status]
+              `INSERT INTO events (user_id, title, start, "end", priority, notes, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [userId, title, startTime, endTime, priority, notes, status]
           );
           console.log(`Event "${title}" inserted successfully`);
       } catch (err) {                               
@@ -260,15 +270,19 @@ const storeGoogleEvents = async (userId, googleEvents) => {
 };
 
 app.put('/update-event', async (req, res) => {
-  const { event_id, title, deadline, status, priority } = req.body;
+  const { event_id, title, start, end, status, priority } = req.body;
+
+  // Ensure start and end are valid dateTime strings
+  const startTime = start.dateTime || start; // Use dateTime if available, fallback to direct value
+  const endTime = end.dateTime || end; // Use dateTime if available, fallback to direct value
 
   try {
     // Update the event in the database
     const result = await pool.query(
       `UPDATE events 
-       SET title = $1, deadline = $2, priority = $3, status = $4
-       WHERE event_id = $5`,
-      [title, deadline, priority, status, event_id]
+       SET title = $1, start = $2, "end" = $3, priority = $4, status = $5
+       WHERE event_id = $6`,
+      [title, startTime, endTime, priority, status, event_id]
     );
 
     if (result.rowCount === 0) {
@@ -279,6 +293,54 @@ app.put('/update-event', async (req, res) => {
   } catch (err) {
     console.error('Error updating event:', err);
     res.status(500).json({ error: 'Failed to update event.' });
+  }
+});
+
+
+
+// app.post('/api/optimize-schedule', async (req, res) => {
+//   const { tasks, weather, commute, preferences } = req.body;
+
+//   try {
+//     const response = await openai.createCompletion({
+//       model: "text-davinci-003",
+//       prompt: `
+//         You are a scheduling assistant. Based on the following inputs:
+//         - Tasks: ${tasks}
+//         - Weather: ${weather}
+//         - Commute: ${commute}
+//         - Preferences: ${preferences}
+        
+//         Create an optimized daily schedule.
+//       `,
+//       max_tokens: 500,
+//     });
+
+//     res.status(200).json({ schedule: response.data.choices[0].text.trim() });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: 'Failed to generate schedule.' });
+//   }
+// });
+app.post('/generate-schedule', async (req, res) => {
+  try {
+    // Get user prompt from the request body
+    const { prompt } = req.body;
+
+    // Create a structured set of messages for the chat model
+    const messages = [
+      { role: "system", content: "You are a helpful assistant." },
+      { role: "user", content: prompt }
+    ];
+
+    // Call the model with the messages
+    const response = await model.call(messages);
+
+    // Return the generated response
+    res.json({ schedule: response.text });
+  } catch (error) {
+    console.error('Error generating schedule:', error);
+    res.status(500).json({ error: 'An error occurred while generating the schedule.' });
   }
 });
 

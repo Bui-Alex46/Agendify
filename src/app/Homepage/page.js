@@ -27,6 +27,7 @@ export default function HomePage() {
   const [selectedEvent, setSelectedEvent] = useState(null)
 
   useEffect(() => {
+    setEvents([]);
     fetch('http://localhost:3001/events',{
       method: 'GET',
       credentials: 'include', // Include cookies
@@ -37,15 +38,21 @@ export default function HomePage() {
         const transformedEvents = data.map(event => ({
           ...event,
           start: {
-            dateTime: event.deadline, // Use `deadline` as the `start.dateTime`
+            dateTime: event.start, // Use `start` from the event
           },
-
+          end: {
+            dateTime: event.end,   // Use `end` from the event
+          },
         }));
   
         setEvents(transformedEvents); // Update the state with transformed events
       })
       .catch(error => console.error('Error fetching events:', error));
   }, []);
+  
+
+  
+
 
 
   const handleLinkGoogleCalendar = () => {
@@ -189,17 +196,34 @@ export default function HomePage() {
           </Card>
         </div>
         <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Detailed Schedule</CardTitle>
-            <CardDescription>Click on a task to view or edit details</CardDescription>
-          </CardHeader>
+        <CardHeader>
+          <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+            <div>
+              <CardTitle>Detailed Schedule</CardTitle>
+              <CardDescription>Click on a task to view or edit details</CardDescription>
+            </div>
+            <div className="flex flex-col space-y-2 sm:flex-row sm:space-x-2 sm:space-y-0">
+              <Button
+                onClick={handleLinkGoogleCalendar}
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Link Google Calendar
+              </Button>
+              <Button  variant="default">
+                <Zap className="w-4 h-4 mr-2" />
+                Optimize Schedule
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
           <CardContent>
             <Tabs defaultValue="today" className="w-full">
               <TabsList>
                 <TabsTrigger value="today">Today</TabsTrigger>
                 <TabsTrigger value="tomorrow">Tomorrow</TabsTrigger>
                 <TabsTrigger value="week">This Week</TabsTrigger>
-                <Button className ='pl-4' onClick={handleLinkGoogleCalendar}> Link Google Calendar </Button>
+             
               </TabsList>
               <TabsContent value="today">
                 <div className="space-y-4">
@@ -297,10 +321,10 @@ export default function HomePage() {
                               Status
                             </Label>
                             <RadioGroup
-                              value={selectedTask?.completed ? "completed" : "pending"}
+                              value={selectedTask?.status ? "completed" : "pending"}
                               onValueChange={(value) =>
                                 setSelectedTask((prev) =>
-                                  prev ? { ...prev, completed: value === "completed" } : null
+                                  prev ? { ...prev, status: value === "completed" } : null
                                 )
                               }
                               className="col-span-3"
@@ -355,23 +379,29 @@ export default function HomePage() {
           <div className="flex-1">
             <p className="font-medium">{event.title}</p> {/* Event title */}
             <p className="text-sm text-muted-foreground">
-            {event.start ? (
-  new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-) : (
-  'No start time available'
-)}
-
-            </p> {/* Event time */}
+            {event.start && event.end ? (
+          <>
+            <span>{new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}</span>
+            {' - '}
+            <span>{new Date(event.end.dateTime || event.end.date).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}</span>
+          </>
+        ) : (
+          'No start or end time available'
+        )}
+      </p> {/* Event time */}
             </div>
-                            {event.completed ? (
-                              <Check className="w-5 h-5 text-green-500" />
-                            ) : (
-                              <Clock className="w-5 h-5 text-muted-foreground" />
-                            )}
-                          </div>
+              {event.status ? (
+                <Check className="w-5 h-5 text-green-500" />
+              ) : (
+                <Clock className="w-5 h-5 text-muted-foreground" />
+              )}
+            </div>
       </Button>
     </DialogTrigger>
     <DialogContent>
@@ -399,10 +429,13 @@ export default function HomePage() {
       </Label>
       <Input
         id="time"
-        value={selectedTask?.time}
+        value={selectedEvent?.start?.dateTime && selectedEvent?.end?.dateTime
+          ? `${new Date(selectedEvent.start.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(selectedEvent.end.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          : 'No time available'
+        }
         className="col-span-3"
         onChange={(e) =>
-          setSelectedTask((prev) => (prev ? { ...prev, time: e.target.value } : null))
+          setSelectedEvent((prev) => (prev ? { ...prev, time: e.target.value } : null))
         }
       />
     </div>
@@ -411,12 +444,9 @@ export default function HomePage() {
         Priority
       </Label>
       <Select
-       value={selectedEvent?.priority || ""}
+       value={selectedEvent?.priority}
        onValueChange={(value) => {
          setSelectedEvent((prev) => (prev ? { ...prev, priority: value } : null));
-         if (selectedEvent) {
-           updateEvent({ ...selectedEvent, priority: value });
-         }
        }}
       >
         <SelectTrigger className="col-span-3">
@@ -443,28 +473,29 @@ export default function HomePage() {
       />
     </div>
     <div className="grid grid-cols-4 items-center gap-4">
-      <Label htmlFor="status" className="text-right">
-        Status
-      </Label>
-      <RadioGroup
-        value={selectedEvent?.completed ? "completed" : "pending"}
-        onValueChange={(value) =>
-          setSelectedEvent((prev) =>
-            prev ? { ...prev, completed: value === "completed" } : null
-          )
-        }
-        className="col-span-3"
-      >
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="pending" id="pending" />
-          <Label htmlFor="pending">Pending</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="completed" id="completed" />
-          <Label htmlFor="completed">Completed</Label>
-        </div>
-      </RadioGroup>
+  <Label htmlFor="status" className="text-right">
+    Status
+  </Label>
+  <RadioGroup
+    value={selectedEvent?.status ? "completed" : "pending"}
+    onValueChange={(value) => {
+      // Track the change locally in selectedEvent state
+      setSelectedEvent((prev) =>
+        prev ? { ...prev, status: value === "completed" } : null
+      );
+    }}
+    className="col-span-3"
+  >
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="pending" id="pending" />
+      <Label htmlFor="pending">Pending</Label>
     </div>
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="completed" id="completed" />
+      <Label htmlFor="completed">Completed</Label>
+    </div>
+  </RadioGroup>
+</div>
   </div>
   <div className="flex justify-between">
     <Button variant="destructive" onClick={() => selectedTask && deleteTask(selectedTask.id)}>
